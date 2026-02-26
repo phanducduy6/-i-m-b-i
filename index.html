@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bảng Tính Điểm Siêu Tốc</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 10px; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
+        h1 { color: #333; font-size: 22px; margin-bottom: 15px; }
+        .setup { margin-bottom: 15px; padding: 10px; background: #e9ecef; border-radius: 8px; }
+        .setup input { font-size: 18px; font-weight: bold; color: #dc3545; width: 60px; text-align: center; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        
+        .players-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        
+        .player-card { background: #fff; border: 2px solid #ddd; padding: 10px; border-radius: 8px; transition: 0.3s; display: flex; flex-direction: column; justify-content: space-between; }
+        .player-card.winner { border-color: #28a745; background: #d4edda; transform: scale(1.02); box-shadow: 0 4px 8px rgba(40,167,69,0.2); }
+        
+        .player-name { width: 90%; padding: 8px; margin-bottom: 5px; border: 1px dashed #aaa; border-radius: 4px; text-align: center; font-weight: bold; font-size: 16px; background: #fdfdfd; }
+        .score-display { font-size: 36px; font-weight: bold; color: #007bff; margin: 5px 0; }
+        
+        /* Cụm nút bấm nhanh */
+        .quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 10px; }
+        .quick-btn { background: #e2e8f0; border: none; padding: 8px 0; border-radius: 4px; font-weight: bold; font-size: 14px; cursor: pointer; color: #333; }
+        .quick-btn:active { background: #cbd5e1; }
+        
+        /* Cụm nhập số tùy chỉnh */
+        .custom-action { display: flex; gap: 5px; margin-bottom: 10px; }
+        .custom-action input { flex: 1; min-width: 0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 16px; }
+        .add-btn, .sub-btn { color: white; border: none; padding: 8px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .add-btn { background: #28a745; }
+        .add-btn:active { background: #218838; }
+        .sub-btn { background: #dc3545; }
+        .sub-btn:active { background: #c82333; }
+        
+        .history { font-size: 12px; color: #666; background: #f8f9fa; padding: 5px; border-radius: 4px; min-height: 35px; word-wrap: break-word; text-align: left; }
+        
+        #winner-msg { font-size: 18px; font-weight: bold; color: #dc3545; margin: 10px 0; min-height: 25px; }
+        .reset-btn { background: #6c757d; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; margin-top: 20px; font-size: 16px; width: 100%; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🏆 Bảng Tính Điểm Siêu Tốc</h1>
+    
+    <div class="setup">
+        <label>Mốc chiến thắng: </label>
+        <input type="number" id="target-score" value="50" onchange="checkWinner()">
+    </div>
+
+    <div id="winner-msg"></div>
+
+    <div class="players-grid">
+        </div>
+
+    <button class="reset-btn" onclick="resetGame()">🔄 Xóa hết, chơi ván mới</button>
+</div>
+
+<script>
+    let scores = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    let histories = { 1: [], 2: [], 3: [], 4: [] };
+
+    // Tự động tạo giao diện cho 4 người chơi
+    const grid = document.querySelector('.players-grid');
+    for (let i = 1; i <= 4; i++) {
+        grid.innerHTML += `
+            <div class="player-card" id="card-${i}">
+                <input type="text" class="player-name" placeholder="Tên Người ${i}" value="Người ${i}">
+                <div class="score-display" id="score-${i}">0</div>
+                
+                <div class="quick-actions">
+                    <button class="quick-btn" onclick="changeScore(${i}, 1)">+1</button>
+                    <button class="quick-btn" onclick="changeScore(${i}, -1)">-1</button>
+                    <button class="quick-btn" onclick="changeScore(${i}, 2)">+2</button>
+                    <button class="quick-btn" onclick="changeScore(${i}, -2)">-2</button>
+                </div>
+
+                <div class="custom-action">
+                    <input type="number" id="input-${i}" placeholder="Số khác">
+                    <button class="add-btn" onclick="customScore(${i}, true)">Cộng</button>
+                    <button class="sub-btn" onclick="customScore(${i}, false)">Trừ</button>
+                </div>
+                
+                <div class="history" id="history-${i}">Lịch sử: </div>
+            </div>
+        `;
+    }
+
+    // Hàm xử lý điểm cộng/trừ trực tiếp
+    function changeScore(playerNum, points) {
+        if (points === 0) return;
+
+        scores[playerNum] += points;
+        document.getElementById(`score-${playerNum}`).innerText = scores[playerNum];
+
+        let displayPoint = points > 0 ? `+${points}` : `${points}`;
+        histories[playerNum].push(displayPoint);
+        
+        // Chỉ hiển thị 5 ván gần nhất cho đỡ rối mắt
+        let recentHistory = histories[playerNum].slice(-5);
+        document.getElementById(`history-${playerNum}`).innerText = `Lịch sử (5 ván gần đây): ${recentHistory.join(' , ')}`;
+
+        checkWinner();
+    }
+
+    // Hàm xử lý khi nhập số tùy chỉnh vào ô
+    function customScore(playerNum, isAdding) {
+        let inputEl = document.getElementById(`input-${playerNum}`);
+        let points = parseInt(inputEl.value);
+
+        if (isNaN(points) || points === 0) {
+            alert("Nhập số vào ô trước đã!");
+            return;
+        }
+
+        // Nếu bấm nút "Trừ", biến số đó thành số âm
+        if (!isAdding) {
+            points = -Math.abs(points);
+        } else {
+            points = Math.abs(points);
+        }
+
+        changeScore(playerNum, points);
+        inputEl.value = ''; // Xóa trắng ô nhập sau khi tính xong
+    }
+
+    function checkWinner() {
+        let targetScore = parseInt(document.getElementById('target-score').value);
+        let winnerMsg = document.getElementById('winner-msg');
+        let hasWinner = false;
+        let winnerNames = [];
+
+        for (let i = 1; i <= 4; i++) {
+            document.getElementById(`card-${i}`).classList.remove('winner');
+            if (scores[i] >= targetScore) {
+                document.getElementById(`card-${i}`).classList.add('winner');
+                let name = document.getElementById(`card-${i}`).querySelector('.player-name').value;
+                winnerNames.push(name);
+                hasWinner = true;
+            }
+        }
+
+        if (hasWinner) {
+            winnerMsg.innerText = `🎉 ${winnerNames.join(', ')} ĐÃ TỚI MỐC! 🎉`;
+        } else {
+            winnerMsg.innerText = '';
+        }
+    }
+
+    function resetGame() {
+        if(confirm("Xóa sạch điểm để bắt đầu ván mới?")) {
+            for (let i = 1; i <= 4; i++) {
+                scores[i] = 0;
+                histories[i] = [];
+                document.getElementById(`score-${i}`).innerText = '0';
+                document.getElementById(`history-${i}`).innerText = 'Lịch sử: ';
+                document.getElementById(`card-${i}`).classList.remove('winner');
+                document.getElementById(`input-${i}`).value = '';
+            }
+            document.getElementById('winner-msg').innerText = '';
+        }
+    }
+</script>
+</body>
+</html>
